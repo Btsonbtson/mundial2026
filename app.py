@@ -5,9 +5,8 @@ from datetime import datetime
 import os
 
 # Ρύθμιση Σελίδας
-st.set_page_config(page_title="Mundial 2026 Predictor App", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="Mundial 2026 Predictor", page_icon="⚽", layout="wide")
 
-# CSS Branding (FIFA Theme)
 st.markdown("""
     <style>
     .main { background-color: #0f172a; color: #f8fafc; }
@@ -21,35 +20,24 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Εντοπισμός Αρχείου Excel
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-EXCEL_FILE = os.path.join(CURRENT_DIR, "Mundial 2026.xlsx")
+# -----------------------------------------------------------------------------
+# ⚠️ SOS: ΒΑΛΕ ΕΔΩ ΤΗΝ ΠΡΑΓΜΑΤΙΚΗ ΔΙΑΔΡΟΜΗ ΤΟΥ EXCEL ΣΤΟ PC ΣΟΥ Ή ΣΤΟ NETWORK DRIVE
+EXCEL_FILE = "Mundial 2026.xlsx" 
+# -----------------------------------------------------------------------------
 
-# Λίστα Κωδικών Πρόσβασης
-PASSWORDS = {
-    "1453": "BOIKOS",
-    "1821": "MAVROMICHALIS",
-    "1940": "CHOUSIADAS"
-}
+PASSWORDS = {"1453": "BOIKOS", "1821": "MAVROMICHALIS", "1940": "CHOUSIADAS"}
 
-# Αρχικοποίηση Session States
-if 'logged_in_user' not in st.session_state:
-    st.session_state.logged_in_user = None
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = [{"user": "System", "msg": "Το chat ενεργοποιήθηκε!"}]
-if 'temp_matches' not in st.session_state:
-    st.session_state.temp_matches = {}
-if 'temp_groups' not in st.session_state:
-    st.session_state.temp_groups = {}
+if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = None
+if 'chat_history' not in st.session_state: st.session_state.chat_history = [{"user": "System", "msg": "Το chat ενεργοποιήθηκε!"}]
+if 'temp_matches' not in st.session_state: st.session_state.temp_matches = {}
+if 'temp_groups' not in st.session_state: st.session_state.temp_groups = {}
 
-# 📅 ΠΡΑΓΜΑΤΙΚΕΣ ΗΜΕΡΟΜΗΝΙΕΣ ΕΝΑΡΞΗΣ MUNDIAL 2026
 MATCH_TIMES = {
-    4: datetime(2026, 6, 11, 22, 0, 0),  # MEXICO - SOUTH AFRICA (Σειρά 4 στο Excel)
+    4: datetime(2026, 6, 11, 22, 0, 0),  # MEXICO - SOUTH AFRICA (Σειρά 4)
     5: datetime(2026, 6, 12, 18, 0, 0),  # SOUTH KOREA - CZECHIA
     6: datetime(2026, 6, 12, 21, 0, 0),  # CANADA - BOSNIA & HERZ.
     7: datetime(2026, 6, 13, 0, 0, 0),   # SPAIN - ECUADOR
 }
-
 STOIXIMAN_ODDS = {
     4: {"1": "1.85", "X": "3.40", "2": "4.50"},
     5: {"1": "2.10", "X": "3.20", "2": "3.60"},
@@ -57,21 +45,17 @@ STOIXIMAN_ODDS = {
     7: {"1": "1.70", "X": "3.60", "2": "5.20"},
 }
 
-# Φόρτωση δεδομένων Excel
 wb_read = openpyxl.load_workbook(EXCEL_FILE, data_only=True)
 sheet_read = wb_read.active
 
-# --- ΟΘΟΝΗ ΕΙΣΟΔΟΥ (LOGIN PANEL) ---
+# --- LOGIN PANEL ---
 if st.session_state.logged_in_user is None:
     st.markdown("<div class='login-container'>", unsafe_allow_html=True)
     st.write("## 🔒 Είσοδος στο Mundial Predictor")
     input_pass = st.text_input("Εισάγετε τον Προσωπικό σας Κωδικό:", type="password")
-    
     if st.button("Είσοδος 🚀"):
         if input_pass in PASSWORDS:
             st.session_state.logged_in_user = PASSWORDS[input_pass]
-            
-            # Φόρτωμα Αγώνων από το Excel στο Buffer (Διαβάζει σωστά τις σειρές 4 έως 7)
             USER_COLS = {"BOIKOS": {"h": "N", "a": "P"}, "MAVROMICHALIS": {"h": "U", "a": "W"}, "CHOUSIADAS": {"h": "AB", "a": "AD"}}
             cols = USER_COLS[st.session_state.logged_in_user]
             for r in range(4, 8):
@@ -80,30 +64,23 @@ if st.session_state.logged_in_user is None:
                     "a": sheet_read[f"{cols['a']}{r}"].value if sheet_read[f"{cols['a']}{r}"].value is not None else 0
                 }
             st.session_state.temp_groups = {}
-            st.success(f"Καλώς ορίσατε, {st.session_state.logged_in_user}!")
             st.rerun()
-        else:
-            st.error("❌ Λάθος Κωδικός! Προσπαθήστε ξανά.")
+        else: st.error("❌ Λάθος Κωδικός!")
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# --- ΚΥΡΙΩΣ ΕΦΑΡΜΟΓΗ ---
-st.title("🏆 MUNDIAL 2026 – AUTOMATED PREDICTOR")
-st.subheader(f"👤 Συνδεδεμένος Παίκτης: {st.session_state.logged_in_user}")
+st.title("🏆 MUNDIAL 2026 – LIVE LOCAL PREDICTOR")
+st.subheader(f"👤 Παίκτης: {st.session_state.logged_in_user}")
 
-# Κουμπί Έξοδος & Αποθήκευση
 if st.button("🚪 ΕΞΟΔΟΣ & ΑΥΤΟΜΑΤΗ ΑΠΟΘΗΚΕΥΣΗ ΣΤΟ EXCEL"):
     wb_save = openpyxl.load_workbook(EXCEL_FILE)
     sh_save = wb_save.active
-    
-    # 1. Σώζουμε τους αγώνες
     USER_COLS = {"BOIKOS": {"h": "N", "a": "P"}, "MAVROMICHALIS": {"h": "U", "a": "W"}, "CHOUSIADAS": {"h": "AB", "a": "AD"}}
     cols = USER_COLS[st.session_state.logged_in_user]
     for r_idx, scores in st.session_state.temp_matches.items():
         sh_save[f"{cols['h']}{r_idx}"] = scores["h"]
         sh_save[f"{cols['a']}{r_idx}"] = scores["a"]
         
-    # 2. Σώζουμε τους ομίλους (Διορθωμένες σειρές 11-14, 17-20, 23-26)
     PLAYER_OFFSETS = {"BOIKOS": 11, "MAVROMICHALIS": 17, "CHOUSIADAS": 23}
     start_row = PLAYER_OFFSETS[st.session_state.logged_in_user]
     for col_letter, positions in st.session_state.temp_groups.items():
@@ -113,15 +90,12 @@ if st.button("🚪 ΕΞΟΔΟΣ & ΑΥΤΟΜΑΤΗ ΑΠΟΘΗΚΕΥΣΗ ΣΤΟ E
         sh_save[f"{col_letter}{start_row+3}"] = positions[3]
         
     wb_save.save(EXCEL_FILE)
-    
     st.session_state.temp_matches = {}
     st.session_state.temp_groups = {}
     st.session_state.logged_in_user = None
-    st.success("Οι προβλέψεις αποθηκεύτηκαν!")
     st.rerun()
 
 st.write("---")
-
 tab1, tab2 = st.tabs(["⚽ Αγώνες & Σκορ", "📊 Κατάταξη Ομίλων"])
 
 # --- TAB 1: ΑΓΩΝΕΣ ---
@@ -131,7 +105,6 @@ with tab1:
         h_team = sheet_read[f"E{r}"].value
         a_team = sheet_read[f"G{r}"].value
         if not h_team: continue
-        
         m_time = MATCH_TIMES.get(r, datetime(2026, 6, 15, 12, 0, 0))
         time_to_start = m_time - datetime.now()
         is_locked = time_to_start.total_seconds() <= 60
@@ -160,7 +133,7 @@ with tab1:
                 else: st.warning("🔒 Κρυφό μέχρι το 1'")
         st.markdown("---")
 
-# --- TAB 2: ΟΜΙΛΟΙ ---
+# --- TAB 2: ΟΜΙΛΟΙ (ΔΙΟΡΘΩΜΕΝΟ) ---
 with tab2:
     st.header("📊 Προβλέψεις Τελικής Κατάταξης Ομίλων")
     GROUPS_MAP = {
@@ -170,34 +143,36 @@ with tab2:
     }
     selected_group = st.selectbox("🗂️ Επιλέξτε Όμιλο:", list(GROUPS_MAP.keys()))
     col_letter = GROUPS_MAP[selected_group]
-    
     PLAYER_OFFSETS = {"BOIKOS": 11, "MAVROMICHALIS": 17, "CHOUSIADAS": 23}
     start_row = PLAYER_OFFSETS[st.session_state.logged_in_user]
     
+    # Διαβάζουμε τις 4 ομάδες του επιλεγμένου ομίλου (Σειρές 4 έως 7)
     group_teams = []
     for r in range(4, 8):
         val = sheet_read[f"{col_letter}{r}"].value
         if val: group_teams.append(str(val).strip())
         
-    if len(group_teams) >= 4:
+    if len(group_teams) == 4:
         if col_letter not in st.session_state.temp_groups:
             st.session_state.temp_groups[col_letter] = [
-                sheet_read[f"{col_letter}{start_row}"].value or group_teams[0],
-                sheet_read[f"{col_letter}{start_row+1}"].value or group_teams[1],
-                sheet_read[f"{col_letter}{start_row+2}"].value or group_teams[2],
-                sheet_read[f"{col_letter}{start_row+3}"].value or group_teams[3]
+                str(sheet_read[f"{col_letter}{start_row}"].value).strip() if sheet_read[f"{col_letter}{start_row}"].value else group_teams[0],
+                str(sheet_read[f"{col_letter}{start_row+1}"].value).strip() if sheet_read[f"{col_letter}{start_row+1}"].value else group_teams[1],
+                str(sheet_read[f"{col_letter}{start_row+2}"].value).strip() if sheet_read[f"{col_letter}{start_row+2}"].value else group_teams[2],
+                str(sheet_read[f"{col_letter}{start_row+3}"].value).strip() if sheet_read[f"{col_letter}{start_row+3}"].value else group_teams[3]
             ]
         g_preds = st.session_state.temp_groups[col_letter]
         
         p1 = st.selectbox("1η Θέση:", group_teams, index=group_teams.index(g_preds[0]) if g_preds[0] in group_teams else 0, key=f"g1_{selected_group}")
         p2 = st.selectbox("2η Θέση:", group_teams, index=group_teams.index(g_preds[1]) if g_preds[1] in group_teams else 1, key=f"g2_{selected_group}")
         p3 = st.selectbox("3η Θέση:", group_teams, index=group_teams.index(g_preds[2]) if g_preds[2] in group_teams else 2, key=f"g3_{selected_group}")
-        p4 = st.selectbox("4η Θέση:", group_teams, index=group_teams.index(g_preds[4-1]) if g_preds[4-1] in group_teams else 3, key=f"g4_{selected_group}")
+        p4 = st.selectbox("4η Θέση:", group_teams, index=group_teams.index(g_preds[3]) if g_preds[3] in group_teams else 3, key=f"g4_{selected_group}")
         st.session_state.temp_groups[col_letter] = [p1, p2, p3, p4]
+    else:
+        st.error(f"❌ Σφάλμα: Δεν βρέθηκαν 4 ομάδες στη στήλη {col_letter} του Excel (Σειρές 4-7).")
 
 # --- 📊 LIVE LEADERBOARD ---
 st.write("---")
-st.header("📊 Live Βαθμολογία (Από τις φόρμουλες του Excel)")
+st.header("📊 Live Βαθμολογία")
 score_boikos, score_mavro, score_chous = 0, 0, 0
 for r in range(4, 8):
     h_val = sheet_read[f"I{r}"].value
@@ -205,9 +180,7 @@ for r in range(4, 8):
         score_boikos += float(sheet_read[f"S{r}"].value or 0)
         score_mavro += float(sheet_read[f"Z{r}"].value or 0)
         score_chous += float(sheet_read[f"AG{r}"].value or 0)
-
-df_lb = pd.DataFrame({"Παίκτης": ["BOIKOS", "MAVROMICHALIS", "CHOUSIADAS"], "Συνολικοί Πόντοι": [score_boikos, score_mavro, score_chous]}).sort_values(by="Συνολικοί Πόντοι", ascending=False)
-st.table(df_lb)
+st.table(pd.DataFrame({"Παίκτης": ["BOIKOS", "MAVROMICHALIS", "CHOUSIADAS"], "Συνολικοί Πόντοι": [score_boikos, score_mavro, score_chous]}).sort_values(by="Συνολικοί Πόντοι", ascending=False))
 
 # --- CHAT ROOM ---
 st.write("---")
@@ -215,7 +188,6 @@ st.header("💬 Live Chat")
 chat_html = "<div class='chat-box'>"
 for chat in st.session_state.chat_history: chat_html += f"<p><b>[{chat['user']}]:</b> {chat['msg']}</p>"
 st.markdown(chat_html + "</div>", unsafe_allow_html=True)
-
 with st.form(key="ch_form", clear_on_submit=True):
     msg = st.text_input("Γράψε την ατάκα σου:")
     if st.form_submit_button("Αποστολή 🚀") and msg:

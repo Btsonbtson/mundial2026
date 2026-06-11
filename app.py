@@ -28,7 +28,7 @@ if 'temp_matches' not in st.session_state: st.session_state.temp_matches = {}
 if 'temp_groups' not in st.session_state: st.session_state.temp_groups = {}
 
 MATCH_TIMES = {
-    4: datetime(2026, 6, 11, 22, 0, 0),  # MEXICO - SOUTH AFRICA (Σειρά 4 / Δείκτης 3)
+    4: datetime(2026, 6, 11, 22, 0, 0),  # MEXICO - SOUTH AFRICA (Σειρά 4)
     5: datetime(2026, 6, 12, 18, 0, 0),  # SOUTH KOREA - CZECHIA
     6: datetime(2026, 6, 12, 21, 0, 0),  # CANADA - BOSNIA & HERZ.
     7: datetime(2026, 6, 13, 0, 0, 0),   # SPAIN - ECUADOR
@@ -40,9 +40,18 @@ STOIXIMAN_ODDS = {
     7: {"1": "1.70", "X": "3.60", "2": "5.20"},
 }
 
+def clean_val(val):
+    """Καθαρίζει τις τιμές από το Google Sheet για να μην σκάει το int()"""
+    if pd.isna(val) or str(val).strip() in ["", "-", "None"]:
+        return 0
+    try:
+        return int(float(str(val).strip()))
+    except:
+        return 0
+
 # 🔗 Σύνδεση με το Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
-df_sheet = conn.read(ttl="0m") # ttl="0m" για να διαβάζει ΠΑΝΤΑ live δεδομένα
+df_sheet = conn.read(ttl="0m")
 
 # --- LOGIN PANEL ---
 if st.session_state.logged_in_user is None:
@@ -53,7 +62,7 @@ if st.session_state.logged_in_user is None:
         if input_pass in PASSWORDS:
             st.session_state.logged_in_user = PASSWORDS[input_pass]
             
-            # 🔄 ΑΥΤΟΜΑΤΗ ΕΝΗΜΕΡΩΣΗ ΣΤΟ ΑΡΧΙΚΟ ΑΝΟΙΓΜΑ (Τραβάει τις ήδη καταχωρημένες προβλέψεις)
+            # 🔄 ΑΥΤΟΜΑΤΗ ΕΝΗΜΕΡΩΣΗ ΜΕ ΑΣΦΑΛΗ ΚΑΘΑΡΙΣΜΟ
             USER_OFFSETS = {"BOIKOS": (13, 15), "MAVROMICHALIS": (20, 22), "CHOUSIADAS": (27, 29)}
             h_col, a_col = USER_OFFSETS[st.session_state.logged_in_user]
             for r in range(4, 8):
@@ -61,12 +70,12 @@ if st.session_state.logged_in_user is None:
                     val_h = df_sheet.iloc[r-1, h_col]
                     val_a = df_sheet.iloc[r-1, a_col]
                     st.session_state.temp_matches[r] = {
-                        "h": int(float(val_h)) if pd.notna(val_h) and str(val_h).strip() != "" else 0,
-                        "a": int(float(val_a)) if pd.notna(val_a) and str(val_a).strip() != "" else 0
+                        "h": clean_val(val_h),
+                        "a": clean_val(val_a)
                     }
                 except:
                     st.session_state.temp_matches[r] = {"h": 0, "a": 0}
-            st.session_state.temp_groups = {} # Reset ομίλων για να τραβήξει τους καταχωρημένους live
+            st.session_state.temp_groups = {} 
             st.rerun()
         else: st.error("❌ Λάθος Κωδικός!")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -94,7 +103,6 @@ if st.button("🚪 ΕΞΟΔΟΣ & ΑΥΤΟΜΑΤΗ ΑΠΟΘΗΚΕΥΣΗ ΣΤΟ C
             df_sheet.iloc[start_row+2, col_idx] = positions[2]
             df_sheet.iloc[start_row+3, col_idx] = positions[3]
             
-        # 🚀 LIVE ΕΓΓΡΑΦΗ ΣΤΟ GOOGLE SHEET
         conn.update(data=df_sheet)
         
         st.session_state.temp_matches = {}
@@ -110,8 +118,8 @@ tab1, tab2 = st.tabs(["⚽ Αγώνες & Σκορ", "📊 Κατάταξη Ομ
 with tab1:
     st.header("Προβλέψεις Σκορ Αγώνων")
     for r in range(4, 8):
-        h_team = df_sheet.iloc[r-1, 4] # Στήλη E
-        a_team = df_sheet.iloc[r-1, 6] # Στήλη G
+        h_team = df_sheet.iloc[r-1, 4] 
+        a_team = df_sheet.iloc[r-1, 6] 
         if pd.isna(h_team): continue
         m_time = MATCH_TIMES.get(r, datetime(2026, 6, 15, 12, 0, 0))
         time_to_start = m_time - datetime.now()
@@ -181,11 +189,14 @@ st.write("---")
 st.header("📊 Live Βαθμολογία (Από τις φόρμουλες του Excel)")
 score_boikos, score_mavro, score_chous = 0.0, 0.0, 0.0
 for r in range(4, 8):
-    h_val = df_sheet.iloc[r-1, 8] # Στήλη I
-    if pd.notna(h_val) and str(h_val).strip() != "-":
-        score_boikos += float(df_sheet.iloc[r-1, 18] or 0) # Στήλη S
-        score_mavro += float(df_sheet.iloc[r-1, 25] or 0)  # Στήλη Z
-        score_chous += float(df_sheet.iloc[r-1, 32] or 0)  # Στήλη AG
+    try:
+        h_val = df_sheet.iloc[r-1, 8]
+        if pd.notna(h_val) and str(h_val).strip() != "-":
+            score_boikos += float(df_sheet.iloc[r-1, 18] or 0)
+            score_mavro += float(df_sheet.iloc[r-1, 25] or 0)
+            score_chous += float(df_sheet.iloc[r-1, 32] or 0)
+    except:
+        pass
 st.table(pd.DataFrame({"Παίκτης": ["BOIKOS", "MAVROMICHALIS", "CHOUSIADAS"], "Συνολικοί Πόντοι": [score_boikos, score_mavro, score_chous]}).sort_values(by="Συνολικοί Πόντοι", ascending=False))
 
 # --- CHAT ROOM ---

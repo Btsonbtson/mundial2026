@@ -41,7 +41,6 @@ STOIXIMAN_ODDS = {
 }
 
 def clean_val(val):
-    """Καθαρίζει τις τιμές από το Google Sheet για να μην σκάει το int()"""
     if pd.isna(val) or str(val).strip() in ["", "-", "None"]:
         return 0
     try:
@@ -53,6 +52,9 @@ def clean_val(val):
 conn = st.connection("gsheets", type=GSheetsConnection)
 df_sheet = conn.read(ttl="0m")
 
+# Μετατρέπουμε το αντίγραφο του DataFrame σε object τύπο για να δέχεται εγγραφές χωρίς περιορισμούς τύπων δεδομένων
+df_sheet = df_sheet.astype(object)
+
 # --- LOGIN PANEL ---
 if st.session_state.logged_in_user is None:
     st.markdown("<div class='login-container'>", unsafe_allow_html=True)
@@ -62,7 +64,6 @@ if st.session_state.logged_in_user is None:
         if input_pass in PASSWORDS:
             st.session_state.logged_in_user = PASSWORDS[input_pass]
             
-            # 🔄 ΑΥΤΟΜΑΤΗ ΕΝΗΜΕΡΩΣΗ ΜΕ ΑΣΦΑΛΗ ΚΑΘΑΡΙΣΜΟ
             USER_OFFSETS = {"BOIKOS": (13, 15), "MAVROMICHALIS": (20, 22), "CHOUSIADAS": (27, 29)}
             h_col, a_col = USER_OFFSETS[st.session_state.logged_in_user]
             for r in range(4, 8):
@@ -87,22 +88,24 @@ st.subheader(f"👤 Παίκτης: {st.session_state.logged_in_user}")
 # Κουμπί Έξοδος & Αποθήκευση
 if st.button("🚪 ΕΞΟΔΟΣ & ΑΥΤΟΜΑΤΗ ΑΠΟΘΗΚΕΥΣΗ ΣΤΟ CLOUD"):
     with st.spinner("Γίνεται αποθήκευση στο Google Sheet..."):
-        # 1. Ενημέρωση Αγώνων
         USER_OFFSETS = {"BOIKOS": (13, 15), "MAVROMICHALIS": (20, 22), "CHOUSIADAS": (27, 29)}
         h_col, a_col = USER_OFFSETS[st.session_state.logged_in_user]
+        
+        # Ενημέρωση Αγώνων (Αποθηκεύουμε ως string/str για να μην χτυπάει το Arrow extension)
         for r_idx, scores in st.session_state.temp_matches.items():
-            df_sheet.iloc[r_idx-1, h_col] = int(scores["h"])
-            df_sheet.iloc[r_idx-1, a_col] = int(scores["a"])
+            df_sheet.iloc[r_idx-1, h_col] = str(int(scores["h"]))
+            df_sheet.iloc[r_idx-1, a_col] = str(int(scores["a"]))
             
-        # 2. Ενημέρωση Ομίλων
+        # Ενημέρωση Ομίλων
         PLAYER_OFFSETS = {"BOIKOS": 10, "MAVROMICHALIS": 16, "CHOUSIADAS": 22}
         start_row = PLAYER_OFFSETS[st.session_state.logged_in_user]
         for col_idx, positions in st.session_state.temp_groups.items():
-            df_sheet.iloc[start_row, col_idx] = positions[0]
-            df_sheet.iloc[start_row+1, col_idx] = positions[1]
-            df_sheet.iloc[start_row+2, col_idx] = positions[2]
-            df_sheet.iloc[start_row+3, col_idx] = positions[3]
+            df_sheet.iloc[start_row, col_idx] = str(positions[0])
+            df_sheet.iloc[start_row+1, col_idx] = str(positions[1])
+            df_sheet.iloc[start_row+2, col_idx] = str(positions[2])
+            df_sheet.iloc[start_row+3, col_idx] = str(positions[3])
             
+        # Πίσω στο Google Sheets
         conn.update(data=df_sheet)
         
         st.session_state.temp_matches = {}

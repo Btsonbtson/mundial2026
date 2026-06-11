@@ -21,6 +21,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Αρχικοποίηση Session States (ΠΡΕΠΕΙ ΝΑ ΓΙΝΕΙ ΠΡΩΤΟ ΑΠΟ ΟΛΑ)
+if 'logged_in_user' not in st.session_state:
+    st.session_state.logged_in_user = None
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = [{"user": "System", "msg": "Το chat ενεργοποιήθηκε με ασφάλεια!"}]
+if 'temp_matches' not in st.session_state:
+    st.session_state.temp_matches = {}
+if 'temp_groups' not in st.session_state:
+    st.session_state.temp_groups = {}
+
 # Εντοπισμός Αρχείου Excel
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 EXCEL_FILE = os.path.join(CURRENT_DIR, "Mundial 2026.xlsx")
@@ -32,13 +42,7 @@ PASSWORDS = {
     "1940": "CHOUSIADAS"
 }
 
-# Αρχικοποίηση Session States
-if 'logged_in_user' not in st.session_state:
-    st.session_state.logged_in_user = None
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = [{"user": "System", "msg": "Το chat ενεργοποιήθηκε με ασφάλεια!"}]
-
-# ΠΡΑΓΜΑΤΙΚΕΣ ΗΜΕΡΟΜΗΝΙΕΣ ΕΝΑΡΞΗΣ MUNDIAL 2026
+# 📅 ΠΡΑΓΜΑΤΙΚΕΣ ΗΜΕΡΟΜΗΝΙΕΣ ΕΝΑΡΞΗΣ MUNDIAL 2026
 MATCH_TIMES = {
     5: datetime(2026, 6, 11, 22, 0, 0),  # MEXICO - SOUTH AFRICA
     6: datetime(2026, 6, 12, 18, 0, 0),  # SOUTH KOREA - CZECHIA
@@ -52,11 +56,6 @@ STOIXIMAN_ODDS = {
     7: {"1": "1.55", "X": "3.90", "2": "6.00"},
     8: {"1": "1.70", "X": "3.60", "2": "5.20"},
 }
-
-# Φόρτωση δεδομένων
-wb_read = openpyxl.load_workbook(EXCEL_FILE, data_only=True)
-sheet_read = wb_read.active
-
 
 # --- ΟΘΟΝΗ ΕΙΣΟΔΟΥ (LOGIN PANEL) ---
 if st.session_state.logged_in_user is None:
@@ -76,14 +75,12 @@ if st.session_state.logged_in_user is None:
 
 
 # --- ΚΥΡΙΩΣ ΕΦΑΡΜΟΓΗ (ΜΟΝΟ ΓΙΑ ΣΥΝΔΕΔΕΜΕΝΟΥΣ) ---
+# Φόρτωση δεδομένων Excel
+wb_read = openpyxl.load_workbook(EXCEL_FILE, data_only=True)
+sheet_read = wb_read.active
+
 st.title("🏆 MUNDIAL 2026 – AUTOMATED PREDICTOR")
 st.subheader(f"👤 Συνδεδεμένος Παίκτης: {st.session_state.logged_in_user}")
-
-# Δομή για προσωρινή αποθήκευση αλλαγών (Buffer) πριν το Logout
-if 'temp_matches' not in st.session_state:
-    st.session_state.temp_matches = {}
-if 'temp_groups' not in st.session_state:
-    st.session_state.temp_groups = {}
 
 # Κουμπί Έξοδος & Αυτόματη Αποθήκευση
 if st.button("🚪 ΕΞΟΔΟΣ & ΑΥΤΟΜΑΤΗ ΑΠΟΘΗΚΕΥΣΗ ΣΤΟ EXCEL"):
@@ -243,4 +240,12 @@ st.write("---")
 st.header("💬 Live Chat")
 chat_html = "<div class='chat-box'>"
 for chat in st.session_state.chat_history:
-    chat_html += f"<p><b>[{chat['user']}]:</b> {chat['msg']}</p
+    chat_html += f"<p><b>[{chat['user']}]:</b> {chat['msg']}</p>"
+chat_html += "</div>"
+st.markdown(chat_html, unsafe_allow_html=True)
+
+with st.form(key="ch_form", clear_on_submit=True):
+    msg = st.text_input("Γράψε την ατάκα σου:")
+    if st.form_submit_button("Αποστολή 🚀") and msg:
+        st.session_state.chat_history.append({"user": st.session_state.logged_in_user, "msg": msg})
+        st.rerun()

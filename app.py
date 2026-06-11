@@ -24,9 +24,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ⚙️ ΣΤΟΙΧΕΙΑ GITHUB REPO (ΑΛΛΑΞΕ ΤΑ ΜΕ ΤΑ ΔΙΚΑ ΣΟΥ)
-GITHUB_USER = "BoikosY"  # Το όνομα χρήστη σου στο GitHub
-REPO_NAME = "mundial2026"  # Το όνομα του αποθετηρίου σου
-FILE_PATH = "Mundial 2026.xlsx"  # Το όνομα του αρχείου Excel
+GITHUB_USER = "BoikosY"  
+REPO_NAME = "mundial2026"  
+FILE_PATH = "Mundial 2026.xlsx"  
 
 PASSWORDS = {"1453": "BOIKOS", "1821": "MAVROMICHALIS", "1940": "CHOUSIADAS"}
 
@@ -36,10 +36,10 @@ if 'temp_matches' not in st.session_state: st.session_state.temp_matches = {}
 if 'temp_groups' not in st.session_state: st.session_state.temp_groups = {}
 
 MATCH_TIMES = {
-    4: datetime(2026, 6, 11, 22, 0, 0),  # MEXICO - SOUTH AFRICA
-    5: datetime(2026, 6, 12, 18, 0, 0),  # SOUTH KOREA - CZECHIA
-    6: datetime(2026, 6, 12, 21, 0, 0),  # CANADA - BOSNIA & HERZ.
-    7: datetime(2026, 6, 13, 0, 0, 0),   # SPAIN - ECUADOR
+    4: datetime(2026, 6, 11, 22, 0, 0),  
+    5: datetime(2026, 6, 12, 18, 0, 0),  
+    6: datetime(2026, 6, 12, 21, 0, 0),  
+    7: datetime(2026, 6, 13, 0, 0, 0),   
 }
 STOIXIMAN_ODDS = {
     4: {"1": "1.85", "X": "3.40", "2": "4.50"},
@@ -110,7 +110,6 @@ if st.button("🚪 ΕΞΟΔΟΣ & ΑΥΤΟΜΑΤΗ ΑΠΟΘΗΚΕΥΣΗ"):
         wb_save.save(output)
         encoded_content = base64.b64encode(output.getvalue()).decode()
         
-        # Σπρώχνουμε τις αλλαγές πίσω στο GitHub μέσω API
         payload = {"message": f"Predictions updated by {st.session_state.logged_in_user}", "content": encoded_content, "sha": sha}
         requests.put(URL, json=payload, headers=headers)
         
@@ -121,7 +120,7 @@ if st.button("🚪 ΕΞΟΔΟΣ & ΑΥΤΟΜΑΤΗ ΑΠΟΘΗΚΕΥΣΗ"):
         st.rerun()
 
 st.write("---")
-tab1, tab2 = st.tabs(["⚽ Αγώνες & Σκορ", "📊 Κατάταξη Ομίλων"])
+tab1, tab2, tab3 = st.tabs(["⚽ Αγώνες & Σκορ", "📊 Κατάταξη Ομίλων", "📥 Κατέβασμα Live Excel"])
 
 # --- TAB 1: ΑΓΩΝΕΣ ---
 with tab1:
@@ -191,6 +190,17 @@ with tab2:
         p3 = st.selectbox("3η Θέση:", group_teams, index=group_teams.index(g_preds[2]) if g_preds[2] in group_teams else 2, key=f"g3_{selected_group}")
         p4 = st.selectbox("4η Θέση:", group_teams, index=group_teams.index(g_preds[3]) if g_preds[3] in group_teams else 3, key=f"g4_{selected_group}")
         st.session_state.temp_groups[col_letter] = [p1, p2, p3, p4]
+
+# --- TAB 3: ΚΑΤΕΒΑΣΜΑ LIVE EXCEL ---
+with tab3:
+    st.header("📊 Κατέβασμα του Πραγματικού Αρχείου Excel")
+    st.write("Κατεβάστε την τελευταία έκδοση του αρχείου με όλες τις φόρμουλες, τα γραφήματα και τις βαθμολογίες ενημερωμένες live!")
+    st.download_button(
+        label="📥 Κατέβασμα Mundial 2026.xlsx",
+        data=file_bytes,
+        file_name="Mundial 2026.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 # --- 📊 LIVE LEADERBOARD ---
 st.write("---")

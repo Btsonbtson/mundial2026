@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
-import openpyxl
 from datetime import datetime
-import os
+from streamlit_gsheets import GSheetsConnection
 
 # Ρύθμιση Σελίδας
 st.set_page_config(page_title="Mundial 2026 Predictor", page_icon="⚽", layout="wide")
 
+# CSS Branding
 st.markdown("""
     <style>
     .main { background-color: #0f172a; color: #f8fafc; }
@@ -20,11 +20,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
-# ⚠️ SOS: ΒΑΛΕ ΕΔΩ ΤΗΝ ΠΡΑΓΜΑΤΙΚΗ ΔΙΑΔΡΟΜΗ ΤΟΥ EXCEL ΣΤΟ PC ΣΟΥ Ή ΣΤΟ NETWORK DRIVE
-EXCEL_FILE = "Mundial 2026.xlsx" 
-# -----------------------------------------------------------------------------
-
 PASSWORDS = {"1453": "BOIKOS", "1821": "MAVROMICHALIS", "1940": "CHOUSIADAS"}
 
 if 'logged_in_user' not in st.session_state: st.session_state.logged_in_user = None
@@ -33,7 +28,7 @@ if 'temp_matches' not in st.session_state: st.session_state.temp_matches = {}
 if 'temp_groups' not in st.session_state: st.session_state.temp_groups = {}
 
 MATCH_TIMES = {
-    4: datetime(2026, 6, 11, 22, 0, 0),  # MEXICO - SOUTH AFRICA (Σειρά 4)
+    4: datetime(2026, 6, 11, 22, 0, 0),  # MEXICO - SOUTH AFRICA (Σειρά 4 / Δείκτης 3)
     5: datetime(2026, 6, 12, 18, 0, 0),  # SOUTH KOREA - CZECHIA
     6: datetime(2026, 6, 12, 21, 0, 0),  # CANADA - BOSNIA & HERZ.
     7: datetime(2026, 6, 13, 0, 0, 0),   # SPAIN - ECUADOR
@@ -45,8 +40,9 @@ STOIXIMAN_ODDS = {
     7: {"1": "1.70", "X": "3.60", "2": "5.20"},
 }
 
-wb_read = openpyxl.load_workbook(EXCEL_FILE, data_only=True)
-sheet_read = wb_read.active
+# 🔗 Σύνδεση με το Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
+df_sheet = conn.read(ttl="0m") # ttl="0m" για να διαβάζει ΠΑΝΤΑ live δεδομένα
 
 # --- LOGIN PANEL ---
 if st.session_state.logged_in_user is None:
@@ -56,44 +52,56 @@ if st.session_state.logged_in_user is None:
     if st.button("Είσοδος 🚀"):
         if input_pass in PASSWORDS:
             st.session_state.logged_in_user = PASSWORDS[input_pass]
-            USER_COLS = {"BOIKOS": {"h": "N", "a": "P"}, "MAVROMICHALIS": {"h": "U", "a": "W"}, "CHOUSIADAS": {"h": "AB", "a": "AD"}}
-            cols = USER_COLS[st.session_state.logged_in_user]
+            
+            # 🔄 ΑΥΤΟΜΑΤΗ ΕΝΗΜΕΡΩΣΗ ΣΤΟ ΑΡΧΙΚΟ ΑΝΟΙΓΜΑ (Τραβάει τις ήδη καταχωρημένες προβλέψεις)
+            USER_OFFSETS = {"BOIKOS": (13, 15), "MAVROMICHALIS": (20, 22), "CHOUSIADAS": (27, 29)}
+            h_col, a_col = USER_OFFSETS[st.session_state.logged_in_user]
             for r in range(4, 8):
-                st.session_state.temp_matches[r] = {
-                    "h": sheet_read[f"{cols['h']}{r}"].value if sheet_read[f"{cols['h']}{r}"].value is not None else 0,
-                    "a": sheet_read[f"{cols['a']}{r}"].value if sheet_read[f"{cols['a']}{r}"].value is not None else 0
-                }
-            st.session_state.temp_groups = {}
+                try:
+                    val_h = df_sheet.iloc[r-1, h_col]
+                    val_a = df_sheet.iloc[r-1, a_col]
+                    st.session_state.temp_matches[r] = {
+                        "h": int(float(val_h)) if pd.notna(val_h) and str(val_h).strip() != "" else 0,
+                        "a": int(float(val_a)) if pd.notna(val_a) and str(val_a).strip() != "" else 0
+                    }
+                except:
+                    st.session_state.temp_matches[r] = {"h": 0, "a": 0}
+            st.session_state.temp_groups = {} # Reset ομίλων για να τραβήξει τους καταχωρημένους live
             st.rerun()
         else: st.error("❌ Λάθος Κωδικός!")
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-st.title("🏆 MUNDIAL 2026 – LIVE LOCAL PREDICTOR")
+st.title("🏆 MUNDIAL 2026 – CLOUD PREDICTOR")
 st.subheader(f"👤 Παίκτης: {st.session_state.logged_in_user}")
 
-if st.button("🚪 ΕΞΟΔΟΣ & ΑΥΤΟΜΑΤΗ ΑΠΟΘΗΚΕΥΣΗ ΣΤΟ EXCEL"):
-    wb_save = openpyxl.load_workbook(EXCEL_FILE)
-    sh_save = wb_save.active
-    USER_COLS = {"BOIKOS": {"h": "N", "a": "P"}, "MAVROMICHALIS": {"h": "U", "a": "W"}, "CHOUSIADAS": {"h": "AB", "a": "AD"}}
-    cols = USER_COLS[st.session_state.logged_in_user]
-    for r_idx, scores in st.session_state.temp_matches.items():
-        sh_save[f"{cols['h']}{r_idx}"] = scores["h"]
-        sh_save[f"{cols['a']}{r_idx}"] = scores["a"]
+# Κουμπί Έξοδος & Αποθήκευση
+if st.button("🚪 ΕΞΟΔΟΣ & ΑΥΤΟΜΑΤΗ ΑΠΟΘΗΚΕΥΣΗ ΣΤΟ CLOUD"):
+    with st.spinner("Γίνεται αποθήκευση στο Google Sheet..."):
+        # 1. Ενημέρωση Αγώνων
+        USER_OFFSETS = {"BOIKOS": (13, 15), "MAVROMICHALIS": (20, 22), "CHOUSIADAS": (27, 29)}
+        h_col, a_col = USER_OFFSETS[st.session_state.logged_in_user]
+        for r_idx, scores in st.session_state.temp_matches.items():
+            df_sheet.iloc[r_idx-1, h_col] = int(scores["h"])
+            df_sheet.iloc[r_idx-1, a_col] = int(scores["a"])
+            
+        # 2. Ενημέρωση Ομίλων
+        PLAYER_OFFSETS = {"BOIKOS": 10, "MAVROMICHALIS": 16, "CHOUSIADAS": 22}
+        start_row = PLAYER_OFFSETS[st.session_state.logged_in_user]
+        for col_idx, positions in st.session_state.temp_groups.items():
+            df_sheet.iloc[start_row, col_idx] = positions[0]
+            df_sheet.iloc[start_row+1, col_idx] = positions[1]
+            df_sheet.iloc[start_row+2, col_idx] = positions[2]
+            df_sheet.iloc[start_row+3, col_idx] = positions[3]
+            
+        # 🚀 LIVE ΕΓΓΡΑΦΗ ΣΤΟ GOOGLE SHEET
+        conn.update(data=df_sheet)
         
-    PLAYER_OFFSETS = {"BOIKOS": 11, "MAVROMICHALIS": 17, "CHOUSIADAS": 23}
-    start_row = PLAYER_OFFSETS[st.session_state.logged_in_user]
-    for col_letter, positions in st.session_state.temp_groups.items():
-        sh_save[f"{col_letter}{start_row}"] = positions[0]
-        sh_save[f"{col_letter}{start_row+1}"] = positions[1]
-        sh_save[f"{col_letter}{start_row+2}"] = positions[2]
-        sh_save[f"{col_letter}{start_row+3}"] = positions[3]
-        
-    wb_save.save(EXCEL_FILE)
-    st.session_state.temp_matches = {}
-    st.session_state.temp_groups = {}
-    st.session_state.logged_in_user = None
-    st.rerun()
+        st.session_state.temp_matches = {}
+        st.session_state.temp_groups = {}
+        st.session_state.logged_in_user = None
+        st.success("Οι αλλαγές αποθηκεύτηκαν!")
+        st.rerun()
 
 st.write("---")
 tab1, tab2 = st.tabs(["⚽ Αγώνες & Σκορ", "📊 Κατάταξη Ομίλων"])
@@ -102,9 +110,9 @@ tab1, tab2 = st.tabs(["⚽ Αγώνες & Σκορ", "📊 Κατάταξη Ομ
 with tab1:
     st.header("Προβλέψεις Σκορ Αγώνων")
     for r in range(4, 8):
-        h_team = sheet_read[f"E{r}"].value
-        a_team = sheet_read[f"G{r}"].value
-        if not h_team: continue
+        h_team = df_sheet.iloc[r-1, 4] # Στήλη E
+        a_team = df_sheet.iloc[r-1, 6] # Στήλη G
+        if pd.isna(h_team): continue
         m_time = MATCH_TIMES.get(r, datetime(2026, 6, 15, 12, 0, 0))
         time_to_start = m_time - datetime.now()
         is_locked = time_to_start.total_seconds() <= 60
@@ -127,59 +135,57 @@ with tab1:
             with c4:
                 st.write("👀 Αποκάλυψη:")
                 if is_locked:
-                    st.write(f"BOIKOS: {sheet_read[f'N{r}'].value or 0}-{sheet_read[f'P{r}'].value or 0}")
-                    st.write(f"MAVRO: {sheet_read[f'U{r}'].value or 0}-{sheet_read[f'W{r}'].value or 0}")
-                    st.write(f"CHOUS: {sheet_read[f'AB{r}'].value or 0}-{sheet_read[f'AD{r}'].value or 0}")
+                    st.write(f"BOIKOS: {df_sheet.iloc[r-1, 13] or 0}-{df_sheet.iloc[r-1, 15] or 0}")
+                    st.write(f"MAVRO: {df_sheet.iloc[r-1, 20] or 0}-{df_sheet.iloc[r-1, 22] or 0}")
+                    st.write(f"CHOUS: {df_sheet.iloc[r-1, 27] or 0}-{df_sheet.iloc[r-1, 29] or 0}")
                 else: st.warning("🔒 Κρυφό μέχρι το 1'")
         st.markdown("---")
 
-# --- TAB 2: ΟΜΙΛΟΙ (ΔΙΟΡΘΩΜΕΝΟ) ---
+# --- TAB 2: ΟΜΙΛΟΙ ---
 with tab2:
     st.header("📊 Προβλέψεις Τελικής Κατάταξης Ομίλων")
     GROUPS_MAP = {
-        "GROUP A": "AL", "GROUP B": "AQ", "GROUP C": "AV", "GROUP D": "BA",
-        "GROUP E": "BF", "GROUP F": "BK", "GROUP G": "BP", "GROUP H": "BU",
-        "GROUP I": "BZ", "GROUP J": "CE", "GROUP K": "CJ", "GROUP L": "CO"
+        "GROUP A": 37, "GROUP B": 42, "GROUP C": 47, "GROUP D": 52,
+        "GROUP E": 57, "GROUP F": 62, "GROUP G": 67, "GROUP H": 72,
+        "GROUP I": 77, "GROUP J": 82, "GROUP K": 87, "GROUP L": 92
     }
     selected_group = st.selectbox("🗂️ Επιλέξτε Όμιλο:", list(GROUPS_MAP.keys()))
-    col_letter = GROUPS_MAP[selected_group]
-    PLAYER_OFFSETS = {"BOIKOS": 11, "MAVROMICHALIS": 17, "CHOUSIADAS": 23}
+    col_idx = GROUPS_MAP[selected_group]
+    PLAYER_OFFSETS = {"BOIKOS": 10, "MAVROMICHALIS": 16, "CHOUSIADAS": 22}
     start_row = PLAYER_OFFSETS[st.session_state.logged_in_user]
     
-    # Διαβάζουμε τις 4 ομάδες του επιλεγμένου ομίλου (Σειρές 4 έως 7)
     group_teams = []
     for r in range(4, 8):
-        val = sheet_read[f"{col_letter}{r}"].value
-        if val: group_teams.append(str(val).strip())
+        val = df_sheet.iloc[r-1, col_idx]
+        if pd.notna(val): group_teams.append(str(val).strip())
         
     if len(group_teams) == 4:
-        if col_letter not in st.session_state.temp_groups:
-            st.session_state.temp_groups[col_letter] = [
-                str(sheet_read[f"{col_letter}{start_row}"].value).strip() if sheet_read[f"{col_letter}{start_row}"].value else group_teams[0],
-                str(sheet_read[f"{col_letter}{start_row+1}"].value).strip() if sheet_read[f"{col_letter}{start_row+1}"].value else group_teams[1],
-                str(sheet_read[f"{col_letter}{start_row+2}"].value).strip() if sheet_read[f"{col_letter}{start_row+2}"].value else group_teams[2],
-                str(sheet_read[f"{col_letter}{start_row+3}"].value).strip() if sheet_read[f"{col_letter}{start_row+3}"].value else group_teams[3]
+        if col_idx not in st.session_state.temp_groups:
+            st.session_state.temp_groups[col_idx] = [
+                str(df_sheet.iloc[start_row, col_idx]).strip() if pd.notna(df_sheet.iloc[start_row, col_idx]) else group_teams[0],
+                str(df_sheet.iloc[start_row+1, col_idx]).strip() if pd.notna(df_sheet.iloc[start_row+1, col_idx]) else group_teams[1],
+                str(df_sheet.iloc[start_row+2, col_idx]).strip() if pd.notna(df_sheet.iloc[start_row+2, col_idx]) else group_teams[2],
+                str(df_sheet.iloc[start_row+3, col_idx]).strip() if pd.notna(df_sheet.iloc[start_row+3, col_idx]) else group_teams[3]
             ]
-        g_preds = st.session_state.temp_groups[col_letter]
+        g_preds = st.session_state.temp_groups[col_idx]
         
         p1 = st.selectbox("1η Θέση:", group_teams, index=group_teams.index(g_preds[0]) if g_preds[0] in group_teams else 0, key=f"g1_{selected_group}")
         p2 = st.selectbox("2η Θέση:", group_teams, index=group_teams.index(g_preds[1]) if g_preds[1] in group_teams else 1, key=f"g2_{selected_group}")
         p3 = st.selectbox("3η Θέση:", group_teams, index=group_teams.index(g_preds[2]) if g_preds[2] in group_teams else 2, key=f"g3_{selected_group}")
         p4 = st.selectbox("4η Θέση:", group_teams, index=group_teams.index(g_preds[3]) if g_preds[3] in group_teams else 3, key=f"g4_{selected_group}")
-        st.session_state.temp_groups[col_letter] = [p1, p2, p3, p4]
-    else:
-        st.error(f"❌ Σφάλμα: Δεν βρέθηκαν 4 ομάδες στη στήλη {col_letter} του Excel (Σειρές 4-7).")
+        st.session_state.temp_groups[col_idx] = [p1, p2, p3, p4]
+    else: st.error(f"❌ Δεν βρέθηκαν 4 ομάδες στη στήλη του ομίλου.")
 
 # --- 📊 LIVE LEADERBOARD ---
 st.write("---")
-st.header("📊 Live Βαθμολογία")
-score_boikos, score_mavro, score_chous = 0, 0, 0
+st.header("📊 Live Βαθμολογία (Από τις φόρμουλες του Excel)")
+score_boikos, score_mavro, score_chous = 0.0, 0.0, 0.0
 for r in range(4, 8):
-    h_val = sheet_read[f"I{r}"].value
-    if h_val is not None and str(h_val).strip() != "-":
-        score_boikos += float(sheet_read[f"S{r}"].value or 0)
-        score_mavro += float(sheet_read[f"Z{r}"].value or 0)
-        score_chous += float(sheet_read[f"AG{r}"].value or 0)
+    h_val = df_sheet.iloc[r-1, 8] # Στήλη I
+    if pd.notna(h_val) and str(h_val).strip() != "-":
+        score_boikos += float(df_sheet.iloc[r-1, 18] or 0) # Στήλη S
+        score_mavro += float(df_sheet.iloc[r-1, 25] or 0)  # Στήλη Z
+        score_chous += float(df_sheet.iloc[r-1, 32] or 0)  # Στήλη AG
 st.table(pd.DataFrame({"Παίκτης": ["BOIKOS", "MAVROMICHALIS", "CHOUSIADAS"], "Συνολικοί Πόντοι": [score_boikos, score_mavro, score_chous]}).sort_values(by="Συνολικοί Πόντοι", ascending=False))
 
 # --- CHAT ROOM ---
